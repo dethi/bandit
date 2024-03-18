@@ -17,7 +17,7 @@ defmodule Bandit.Adapter do
   @typedoc "A struct for backing a Plug.Conn.Adapter"
   @type t :: %__MODULE__{
           owner_pid: pid() | nil,
-          transport: Bandit.HTTPTransport.transport(),
+          transport: Bandit.HTTPTransport.t(),
           transport_info: Bandit.TransportInfo.t(),
           method: Plug.Conn.method() | nil,
           status: Plug.Conn.status() | nil,
@@ -58,7 +58,7 @@ defmodule Bandit.Adapter do
       adapter.metrics
       |> Map.put_new_lazy(:req_body_start_time, &Bandit.Telemetry.monotonic_time/0)
 
-    case Bandit.HTTP1.Socket.read_data(adapter.transport, opts) do
+    case Bandit.HTTPTransport.read_data(adapter.transport, opts) do
       {:ok, body, transport} ->
         body = IO.iodata_to_binary(body)
 
@@ -161,7 +161,7 @@ defmodule Bandit.Adapter do
 
       {socket, bytes_actually_written} =
         if send_resp_body?(adapter),
-          do: {Bandit.HTTP1.Socket.sendfile(adapter.transport, path, offset, length), length},
+          do: {Bandit.HTTPTransport.sendfile(adapter.transport, path, offset, length), length},
           else: {adapter.transport, 0}
 
       metrics =
@@ -217,7 +217,7 @@ defmodule Bandit.Adapter do
     body_disposition = if send_resp_body?(adapter), do: body_disposition, else: :no_body
 
     socket =
-      Bandit.HTTP1.Socket.send_headers(adapter.transport, status, headers, body_disposition)
+      Bandit.HTTPTransport.send_headers(adapter.transport, status, headers, body_disposition)
 
     %{adapter | transport: socket}
   end
@@ -225,7 +225,7 @@ defmodule Bandit.Adapter do
   defp send_data(adapter, data, end_request) do
     socket =
       if send_resp_body?(adapter),
-        do: Bandit.HTTP1.Socket.send_data(adapter.transport, data, end_request),
+        do: Bandit.HTTPTransport.send_data(adapter.transport, data, end_request),
         else: adapter.transport
 
     data_size = IO.iodata_length(data)
@@ -259,7 +259,7 @@ defmodule Bandit.Adapter do
 
   @impl Plug.Conn.Adapter
   def get_http_protocol(%__MODULE__{} = adapter),
-    do: Bandit.HTTP1.Socket.version(adapter.transport)
+    do: Bandit.HTTPTransport.version(adapter.transport)
 
   defp validate_calling_process!(%{owner_pid: owner}) when owner == self(), do: :ok
   defp validate_calling_process!(_), do: raise("Adapter functions must be called by stream owner")
